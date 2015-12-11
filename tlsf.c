@@ -131,7 +131,7 @@ static const size_t block_start_offset =
 ** the prev_phys_block field, and no larger than the number of addressable
 ** bits for FL_INDEX.
 */
-static const size_t block_size_min = 
+static const size_t block_size_min =
 	sizeof(block_header_t) - sizeof(block_header_t*);
 static const size_t block_size_max = tlsf_cast(size_t, 1) << FL_INDEX_MAX;
 
@@ -150,7 +150,7 @@ typedef struct control_t
 	block_header_t* blocks[FL_INDEX_COUNT][SL_INDEX_COUNT];
 } control_t;
 
-static control_t control __attribute__ ((aligned(ALIGN_SIZE)));
+static control_t *control;
 /* A type used for casting when doing pointer arithmetic. */
 typedef ptrdiff_t tlsfptr_t;
 
@@ -339,11 +339,11 @@ static block_header_t* search_suitable_block(int* fli, int* sli)
 	** First, search for a block in the list associated with the given
 	** fl/sl index.
 	*/
-	unsigned int sl_map = control.sl_bitmap[fl] & (~0 << sl);
+	unsigned int sl_map = control->sl_bitmap[fl] & (~0 << sl);
 	if (!sl_map)
 	{
 		/* No block exists. Search in the next largest first-level list. */
-		const unsigned int fl_map = control.fl_bitmap & (~0 << (fl + 1));
+		const unsigned int fl_map = control->fl_bitmap & (~0 << (fl + 1));
 		if (!fl_map)
 		{
 			/* No free blocks available, memory has been exhausted. */
@@ -352,14 +352,14 @@ static block_header_t* search_suitable_block(int* fli, int* sli)
 
 		fl = tlsf_ffs(fl_map);
 		*fli = fl;
-		sl_map = control.sl_bitmap[fl];
+		sl_map = control->sl_bitmap[fl];
 	}
 	tlsf_assert(sl_map && "internal error - second level bitmap is null");
 	sl = tlsf_ffs(sl_map);
 	*sli = sl;
 
 	/* Return the first block in the free list. */
-	return control.blocks[fl][sl];
+	return control->blocks[fl][sl];
 }
 
 /* Remove a free block from the free list.*/
@@ -373,19 +373,19 @@ static void remove_free_block(block_header_t* block, int fl, int sl)
 	prev->next_free = next;
 
 	/* If this block is the head of the free list, set new head. */
-	if (control.blocks[fl][sl] == block)
+	if (control->blocks[fl][sl] == block)
 	{
-		control.blocks[fl][sl] = next;
+		control->blocks[fl][sl] = next;
 
 		/* If the new head is null, clear the bitmap. */
-		if (next == &control.block_null)
+		if (next == &control->block_null)
 		{
-			control.sl_bitmap[fl] &= ~(1 << sl);
+			control->sl_bitmap[fl] &= ~(1 << sl);
 
 			/* If the second bitmap is now empty, clear the fl bitmap. */
-			if (!control.sl_bitmap[fl])
+			if (!control->sl_bitmap[fl])
 			{
-				control.fl_bitmap &= ~(1 << fl);
+				control->fl_bitmap &= ~(1 << fl);
 			}
 		}
 	}
@@ -394,11 +394,11 @@ static void remove_free_block(block_header_t* block, int fl, int sl)
 /* Insert a free block into the free block list. */
 static void insert_free_block(block_header_t* block, int fl, int sl)
 {
-	block_header_t* current = control.blocks[fl][sl];
+	block_header_t* current = control->blocks[fl][sl];
 	tlsf_assert(current && "free list cannot have a null entry");
 	tlsf_assert(block && "cannot insert a null entry into the free list");
 	block->next_free = current;
-	block->prev_free = &control.block_null;
+	block->prev_free = &control->block_null;
 	current->prev_free = block;
 
 	tlsf_assert(block_to_ptr(block) == align_ptr(block_to_ptr(block), ALIGN_SIZE)
@@ -407,9 +407,9 @@ static void insert_free_block(block_header_t* block, int fl, int sl)
 	** Insert the new block at the head of the list, and mark the first-
 	** and second-level bitmaps appropriately.
 	*/
-	control.blocks[fl][sl] = block;
-	control.fl_bitmap |= (1 << fl);
-	control.sl_bitmap[fl] |= (1 << sl);
+	control->blocks[fl][sl] = block;
+	control->fl_bitmap |= (1 << fl);
+	control->sl_bitmap[fl] |= (1 << sl);
 }
 
 /* Remove a given block from the free list. */
@@ -577,16 +577,16 @@ static void control_construct(void)
 {
 	int i, j;
 
-	control.block_null.next_free = &control.block_null;
-	control.block_null.prev_free = &control.block_null;
+	control->block_null.next_free = &control->block_null;
+	control->block_null.prev_free = &control->block_null;
 
-	control.fl_bitmap = 0;
+	control->fl_bitmap = 0;
 	for (i = 0; i < FL_INDEX_COUNT; ++i)
 	{
-		control.sl_bitmap[i] = 0;
+		control->sl_bitmap[i] = 0;
 		for (j = 0; j < SL_INDEX_COUNT; ++j)
 		{
-			control.blocks[i][j] = &control.block_null;
+			control->blocks[i][j] = &control->block_null;
 		}
 	}
 }
@@ -608,7 +608,7 @@ int tlsf_add_pool(void* mem, size_t bytes)
 
 	if (pool_bytes < block_size_min || pool_bytes > block_size_max)
 	{
-		printf("tlsf_add_pool: Memory size must be between %u and %u bytes.\n", 
+		printf("tlsf_add_pool: Memory size must be between %u and %u bytes.\n",
 			(unsigned int)(pool_overhead + block_size_min),
 			(unsigned int)(pool_overhead + block_size_max));
 		return 0;
@@ -646,6 +646,8 @@ void tlsf_create(void* mem)
 			(unsigned int)ALIGN_SIZE);
 		return;
 	}
+
+    control = tlsf_cast(control_t*, mem);
 
 	control_construct();
 }
