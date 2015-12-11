@@ -18,6 +18,14 @@
 
 #include <stddef.h>
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+/* Create/destroy a memory pool. */
+void tlsf_create(void* mem);
+void tlsf_create_with_pool(void* mem, size_t bytes);
+
 /* Add/remove memory pools. */
 int tlsf_add_pool(void* mem, size_t bytes);
 
@@ -26,5 +34,9 @@ void* tlsf_malloc(size_t bytes);
 void* tlsf_memalign(size_t align, size_t bytes);
 void* tlsf_realloc(void* ptr, size_t size);
 void tlsf_free(void* ptr);
+
+#if defined(__cplusplus)
+};
+#endif
 
 #endif

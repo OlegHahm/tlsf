@@ -150,20 +150,7 @@ typedef struct control_t
 	block_header_t* blocks[FL_INDEX_COUNT][SL_INDEX_COUNT];
 } control_t;
 
-static control_t control __attribute__ ((aligned(ALIGN_SIZE))) = {
-	.block_null = {
-		.next_free = &control.block_null,
-		.prev_free = &control.block_null,
-	},
-	.fl_bitmap = 0,
-	.sl_bitmap = {0},
-	.blocks = {
-		[0 ... FL_INDEX_COUNT-1] = {
-			[0 ... SL_INDEX_COUNT-1] = &control.block_null
-		}
-	}
-};
-
+static control_t control __attribute__ ((aligned(ALIGN_SIZE)));
 /* A type used for casting when doing pointer arithmetic. */
 typedef ptrdiff_t tlsfptr_t;
 
@@ -585,6 +572,25 @@ static void* block_prepare_used(block_header_t* block, size_t size)
 	return p;
 }
 
+/* Clear structure and point all empty lists at the null block. */
+static void control_construct(void)
+{
+	int i, j;
+
+	control.block_null.next_free = &control.block_null;
+	control.block_null.prev_free = &control.block_null;
+
+	control.fl_bitmap = 0;
+	for (i = 0; i < FL_INDEX_COUNT; ++i)
+	{
+		control.sl_bitmap[i] = 0;
+		for (j = 0; j < SL_INDEX_COUNT; ++j)
+		{
+			control.blocks[i][j] = &control.block_null;
+		}
+	}
+}
+
 int tlsf_add_pool(void* mem, size_t bytes)
 {
 	block_header_t* block;
@@ -631,6 +637,24 @@ int tlsf_add_pool(void* mem, size_t bytes)
 /*
 ** TLSF main interface.
 */
+
+void tlsf_create(void* mem)
+{
+	if (((tlsfptr_t)mem % ALIGN_SIZE) != 0)
+	{
+		printf("tlsf_create: Memory must be aligned to %u bytes.\n",
+			(unsigned int)ALIGN_SIZE);
+		return;
+	}
+
+	control_construct();
+}
+
+void tlsf_create_with_pool(void* mem, size_t bytes)
+{
+	tlsf_create(mem);
+	tlsf_add_pool((char*)mem + sizeof(control_t), bytes - sizeof(control_t));
+}
 
 void* tlsf_malloc(size_t size)
 {
