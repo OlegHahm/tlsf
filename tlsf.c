@@ -16,7 +16,7 @@
 enum tlsf_public
 {
 	/* log2 of number of linear subdivisions of block sizes. */
-	SL_INDEX_COUNT_LOG2 = 5,
+	SL_INDEX_COUNT_LOG2 = 2,
 };
 
 /* Private constants: do not modify. */
