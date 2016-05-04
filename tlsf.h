@@ -35,6 +35,10 @@ void* tlsf_memalign(size_t align, size_t bytes);
 void* tlsf_realloc(void* ptr, size_t size);
 void tlsf_free(void* ptr);
 
+#ifdef DEVELHELP
+void tlsf_walk_pool(void *pool);
+#endif
+
 #if defined(__cplusplus)
 };
 #endif

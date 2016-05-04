@@ -154,6 +154,10 @@ static control_t *control;
 /* A type used for casting when doing pointer arithmetic. */
 typedef ptrdiff_t tlsfptr_t;
 
+#ifdef DEVELHELP
+void *default_pool;
+#endif
+
 /*
 ** block_header_t member functions.
 */
@@ -591,6 +595,49 @@ static void control_construct(void)
 	}
 }
 
+#ifdef DEVELHELP
+/*
+** Debugging utilities.
+*/
+typedef void (*tlsf_walker)(void* ptr, size_t size, int used);
+
+static void default_walker(void* ptr, size_t size, int used)
+{
+	printf("\tMemory @ %p is %s, size: %u (block: %p)\n", ptr, used ? "used" : "free",
+			(unsigned int)size, (void*) block_from_ptr(ptr));
+}
+
+void tlsf_walk_pool(void *pool)
+{
+	if (!pool)
+	{
+		pool = default_pool;
+	}
+	block_header_t* block =
+		offset_to_block(pool, -(int)block_header_overhead);
+
+	while (block && !block_is_last(block))
+	{
+		default_walker(
+			block_to_ptr(block),
+			block_size(block),
+			!block_is_free(block));
+		block = block_next(block);
+	}
+}
+
+size_t tlsf_block_size(void* ptr)
+{
+	size_t size = 0;
+	if (ptr)
+	{
+		const block_header_t* block = block_from_ptr(ptr);
+		size = block_size(block);
+	}
+	return size;
+}
+#endif
+
 int tlsf_add_pool(void* mem, size_t bytes)
 {
 	block_header_t* block;
@@ -631,6 +678,8 @@ int tlsf_add_pool(void* mem, size_t bytes)
 	block_set_used(next);
 	block_set_prev_free(next);
 
+	default_pool = mem;
+
 	return 1;
 }
 
@@ -647,7 +696,7 @@ void tlsf_create(void* mem)
 		return;
 	}
 
-    control = tlsf_cast(control_t*, mem);
+	control = tlsf_cast(control_t*, mem);
 
 	control_construct();
 }
