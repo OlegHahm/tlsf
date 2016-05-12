@@ -13,10 +13,12 @@ void *TLSF_MALLOC_NAME(malloc)(size_t bytes)
 
 void *TLSF_MALLOC_NAME(calloc)(size_t count, size_t bytes)
 {
+    unsigned old_state = irq_disable();
     void *result = tlsf_malloc(count * bytes);
     if (result) {
         memset(result, 0, count * bytes);
     }
+    irq_restore(old_state);
     return result;
 }
 
