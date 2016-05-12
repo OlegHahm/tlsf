@@ -343,11 +343,11 @@ static block_header_t* search_suitable_block(int* fli, int* sli)
 	** First, search for a block in the list associated with the given
 	** fl/sl index.
 	*/
-	unsigned int sl_map = control->sl_bitmap[fl] & (~0 << sl);
+	unsigned int sl_map = control->sl_bitmap[fl] & (((unsigned int)~0) << sl);
 	if (!sl_map)
 	{
 		/* No block exists. Search in the next largest first-level list. */
-		const unsigned int fl_map = control->fl_bitmap & (~0 << (fl + 1));
+		const unsigned int fl_map = control->fl_bitmap & (((unsigned int)~0) << (fl + 1));
 		if (!fl_map)
 		{
 			/* No free blocks available, memory has been exhausted. */
